@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <form>
+            <button id="read">Connect with BLE device</button>
+            <button id="start" disabled>Start</button>
+            <button id="stop" disabled>Stop</button>
+        </form>
+    </body>
+    <script>
+        var deviceName = "Nick's App";
+        const serviceUuid = "19b10010-e8f2-537e-4f6c-d104768a1214";
+        const characteristicsUUID = {
+        led:"19b10011-e8f2-537e-4f6c-d104768a1214",
+        button:"19b10012-e8f2-537e-4f6c-d104768a1214"
+        }
+
+        function isWebBluetoothEnabled() {
+            if (!navigator.bluetooth) {
+                console.log('Web bluetooth API is not available in this browser!');
+                return false;
+            }
+            return true;
+        }
+        console.log("sample");
+
+        function getDeviceInfo() {
+            let options = {
+                // acceptAllDevices: true // option to accept all devices
+                optionalServices: [serviceUuid],
+                "filters": [
+                    {"name": deviceName}
+                ]
+            }
+            console.log("Requesting bluetooth device...");
+            navigator.bluetooth.requestDevice(options).then(device => {
+                console.log('> Name: ' + device.name);
+                console.log('Connecting to GATT server');
+                return device.gatt.connect();
+            })
+            .then(server => {
+                console.log('Getting GAP Service');
+                return server.getPrimaryService(serviceUuid);
+            })
+            .then(service => {
+                return service.getCharacteristic("19b10011-e8f2-537e-4f6c-d104768a1214")
+            })
+
+            .then(characteristic => {
+                console.log('Reading Battery Level...');
+                return characteristic.readValue();
+            })
+            .then(value => {
+                let batteryLevel = value.getUint8(0);
+                console.log('> Battery Level is ' + batteryLevel + '%');
+            })
+            .catch(error => {
+                console.log('Argh! ' + error);
+            })
+            }
+
+        document.querySelector('#read').addEventListener('click', function(event) {
+            event.stopPropagation();
+            event.preventDefault();
+
+            if (isWebBluetoothEnabled()) {
+                getDeviceInfo();
+            }
+        })
+
+        document.querySelector('#start').addEventListener('click', function(event) {
+            if (isWebBluetoothEnabled()) {
+                start();
+            }
+        })
+
+        document.querySelector('#stop').addEventListener('click', function(event) {
+            if (isWebBluetoothEnabled()) {
+                stop();
+            }
+        })
+
+
+
+
+    </script>
+</html>
