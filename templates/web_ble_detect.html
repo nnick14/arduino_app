@@ -7,25 +7,46 @@
             <button id="start">Start</button>
             <button id="stop">Stop</button>
         </form>
+        <div id="text-section">
+            <h1 id="ready">Ready</h1>
+        </div>
         <div id="terminal"></div>
     </body>
     <script>
+        // GATT searches for only this device name
         var deviceName = "Nick's App";
-        const serviceUuid = "19b10010-e8f2-537e-4f6c-d104768a1214";
+
+        // These are the random UUIDs that I generated
+        const serviceUuid = "6a521c59-55b5-4384-85c0-6534e63fb09e";
+        const characteristicsUUID = {
+            led: "6a521c60-55b5-4384-85c0-6534e63fb09e",
+            temp: "6a521c61-55b5-4384-85c0-6534e63fb09e",
+            newChar: "6a521c62-55b5-4384-85c0-6534e63fb09e",
+        }
+        const uuidLookup = {
+            "6a521c60-55b5-4384-85c0-6534e63fb09e": "led",
+            "6a521c61-55b5-4384-85c0-6534e63fb09e": "temp",
+            "6a521c62-55b5-4384-85c0-6534e63fb09e": "newChar",
+        }
+
+        // const serviceUuid = "19b10010-e8f2-537e-4f6c-d104768a1214";
         var bluetoothDevice;
         var batteryLevel;
-        const characteristicsUUID = {
-            led:"19b10011-e8f2-537e-4f6c-d104768a1214",
-            button:"19b10012-e8f2-537e-4f6c-d104768a1214"
-        }
+        // const characteristicsUUID = {
+        //     led:"19b10011-e8f2-537e-4f6c-d104768a1214",
+        //     button:"19b10012-e8f2-537e-4f6c-d104768a1214"
+        // }
 
         let connectButton = document.getElementById('connect');
         let disconnectButton = document.getElementById('disconnect');
         let startButton = document.getElementById('start');
         let endButton = document.getElementById('end');
         let deviceCache = null;
-        let characteristicCache = null;
+        let tempCharacteristic = null;
+        let newCharacteristic = null;
         let terminalContainer = document.getElementById('terminal');
+        let readyButton = document.getElementById('ready')
+        readyButton.style.color = "gray";
 
 
         connectButton.addEventListener('click', function() {
@@ -43,7 +64,12 @@
         function connect() {
             return (deviceCache ? Promise.resolve(deviceCache) : requestBluetoothDevice())
             .then(device => connectDeviceAndCacheCharacteristics(device))
-            .then(characteristic => startNotifications(characteristic))
+            // Set up notification monitoring for more than one characteristic
+            .then(characteristic => {
+                for (item of characteristic) {
+                    startNotifications(item)
+                }
+            })
             .catch(error => console.log('Argh! ' + error));
         }
 
@@ -106,17 +132,25 @@
                 }
             }
 
-            if (characteristicCache) {
-                characteristicCache.removeEventListener('characteristicvaluechanged',
+            if (tempCharacteristic) {
+                tempCharacteristic.removeEventListener('characteristicvaluechanged',
                     handleCharacteristicValueChanged);
-                characteristicCache = null;
+                    tempCharacteristic = null;
+            }
+            if (newCharacteristic) {
+                newCharacteristic.removeEventListener('characteristicvaluechanged',
+                    handleCharacteristicValueChanged);
+                    newCharacteristic = null;
             }
             deviceCache = null;
         }
 
         function handleCharacteristicValueChanged(event) {
-            let value = event.target.value.getFloat32(0, true);
-            console.log('Aruino Output: ' + value);
+            // Output the value for each event differently
+            let tempValue = event.target.value.getFloat32(0, true);
+            console.log('Aruino Output for ' + 
+                uuidLookup[event.target.uuid] + ': ' + tempValue.toFixed(2));
+
         }
 
         function log(data, type = '') {
@@ -125,8 +159,8 @@
         }
 
         function connectDeviceAndCacheCharacteristics(device) {
-            if (device.gatt.connected && characteristicCache) {
-                return Promise.resolve(characteristicCache);
+            if (device.gatt.connected && tempCharacteristic) {
+                return Promise.resolve(tempCharacteristic);
             }
             console.log('Connecting to GATT server...');
             return device.gatt.connect()
@@ -136,12 +170,25 @@
             })
             .then(service => {
                 console.log('Service found, getting characteristic...');
-                return service.getCharacteristic(characteristicsUUID["button"]);
+                // Checking for all characteristics emitted
+                return service.getCharacteristics();
             })
-            .then(characteristic => {
-                console.log('Characteristic found');
-                characteristicCache = characteristic;
-                return characteristicCache;
+            .then(characteristics => {
+                console.log('Characteristics found');
+                // Assigning the relevant characteristics from the Arduino to
+                // the HTML page
+                for (entry of characteristics) {
+                    if (entry.uuid === characteristicsUUID["temp"]) {
+                        tempCharacteristic = entry;
+                        console.log('temp: ' + tempCharacteristic);
+                    } else if (entry.uuid === characteristicsUUID["newChar"]) {
+                        newCharacteristic = entry;
+                        console.log('new: ' + newCharacteristic);
+
+                    }
+                }
+                readyButton.style.color = 'green';
+                return [tempCharacteristic, newCharacteristic];
             });
 
         }
