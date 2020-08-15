@@ -27,7 +27,7 @@ BLEService ledService("19B10010-E8F2-537E-4F6C-D104768A1214"); // create service
 // create switch characteristic and allow remote device to read and write
 BLEByteCharacteristic ledCharacteristic("19B10011-E8F2-537E-4F6C-D104768A1214", BLERead | BLEWrite);
 // create button characteristic and allow remote device to get notifications
-BLEByteCharacteristic buttonCharacteristic("19B10012-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify);
+BLEFloatCharacteristic buttonCharacteristic("19B10012-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify);
 
 void setup() {
   Serial.begin(9600);
@@ -70,7 +70,7 @@ void loop() {
 
   // read the current button pin state
 //  char buttonValue = digitalRead(buttonPin);
-  char buttonValue = random(12, 24);
+  float buttonValue = (random(1, 99) / 100.0) + random(12, 24);
 
   // has the value changed since the last read
   boolean buttonChanged = (buttonCharacteristic.value() != buttonValue);
@@ -78,9 +78,11 @@ void loop() {
   if (buttonChanged) {
     // button state changed, update characteristics
     Serial.println("Button changed");
+    Serial.println(buttonValue);
     ledCharacteristic.writeValue(buttonValue);
     buttonCharacteristic.writeValue(buttonValue);
   }
+  delay(3000);
 
   if (ledCharacteristic.written() || buttonChanged) {
     // update LED, either central has written to characteristic or button state has changed
