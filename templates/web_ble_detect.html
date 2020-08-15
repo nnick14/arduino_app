@@ -2,29 +2,53 @@
 <html>
     <body>
         <form>
-            <button id="read">Connect with BLE device</button>
-            <button id="start" disabled>Start</button>
-            <button id="stop" disabled>Stop</button>
+            <button id="connect">Connect BLE device</button>
+            <button id="disconnect">Disconnect Device</button>
+            <button id="start">Start</button>
+            <button id="stop">Stop</button>
         </form>
+        <div id="terminal"></div>
     </body>
     <script>
         var deviceName = "Nick's App";
         const serviceUuid = "19b10010-e8f2-537e-4f6c-d104768a1214";
+        var bluetoothDevice;
+        var batteryLevel;
         const characteristicsUUID = {
-        led:"19b10011-e8f2-537e-4f6c-d104768a1214",
-        button:"19b10012-e8f2-537e-4f6c-d104768a1214"
+            led:"19b10011-e8f2-537e-4f6c-d104768a1214",
+            button:"19b10012-e8f2-537e-4f6c-d104768a1214"
         }
 
-        function isWebBluetoothEnabled() {
-            if (!navigator.bluetooth) {
-                console.log('Web bluetooth API is not available in this browser!');
-                return false;
-            }
-            return true;
-        }
-        console.log("sample");
+        let connectButton = document.getElementById('connect');
+        let disconnectButton = document.getElementById('disconnect');
+        let startButton = document.getElementById('start');
+        let endButton = document.getElementById('end');
+        let deviceCache = null;
+        let characteristicCache = null;
+        let terminalContainer = document.getElementById('terminal');
 
-        function getDeviceInfo() {
+
+        connectButton.addEventListener('click', function() {
+            event.stopPropagation();
+            event.preventDefault();
+            connect();
+        });
+
+        disconnectButton.addEventListener('click', function() {
+            event.stopPropagation();
+            event.preventDefault();
+            disconnect();
+        });
+
+        function connect() {
+            return (deviceCache ? Promise.resolve(deviceCache) : requestBluetoothDevice())
+            .then(device => connectDeviceAndCacheCharacteristics(device))
+            .then(characteristic => startNotifications(characteristic))
+            .catch(error => console.log('Argh! ' + error));
+        }
+
+        function requestBluetoothDevice() {
+            console.log('Requesting bluetooth device...');
             let options = {
                 // acceptAllDevices: true // option to accept all devices
                 optionalServices: [serviceUuid],
@@ -32,53 +56,265 @@
                     {"name": deviceName}
                 ]
             }
-            console.log("Requesting bluetooth device...");
-            navigator.bluetooth.requestDevice(options).then(device => {
-                console.log('> Name: ' + device.name);
-                console.log('Connecting to GATT server');
-                return device.gatt.connect();
-            })
+
+            return navigator.bluetooth.requestDevice(options)
+            .then(device => {
+                console.log('"' + device.name + '" bluetooth device selected');
+                deviceCache = device;
+
+                deviceCache.addEventListener('gattserverdisconnnected',
+                    handleDisconnection);
+
+                return deviceCache;
+            });
+        }
+
+        function handleDisconnection(event) {
+            let device = event.target;
+
+            console.log('"' + device.name + 
+                '" bluetooth device disconnected, trying to reconnect...');
+            
+            connectDeviceAndCacheCharacteristics(device)
+            .then(characteristic => startNotifications(characteristic))
+            .catch(error => console.log('Reconnection Error: ' + error));
+        }
+        
+        function startNotifications(characteristic) {
+            console.log('Starting notifications...');
+
+            return characteristic.startNotifications().
+                then(() => {
+                    console.log('Notifications started');
+                    characteristic.addEventListener('characteristicvaluechanged',
+                        handleCharacteristicValueChanged)
+                });
+            }
+
+        function disconnect() {
+            if (deviceCache) {
+                console.log('Disconnecting from "' + deviceCache.name + '" bluetooth device...');
+                deviceCache.removeEventListener('gattservicedisconnected',
+                    handleDisconnection);
+                if (deviceCache.gatt.connected) {
+                    deviceCache.gatt.disconnect();
+                    console.log('"' + deviceCache.name + '" bluetooth device disconnnected');
+                }
+                else {
+                    console.log('"' + deviceCache.name + 
+                        '" bluetooth device is already disconnected');
+                }
+            }
+
+            if (characteristicCache) {
+                characteristicCache.removeEventListener('characteristicvaluechanged',
+                    handleCharacteristicValueChanged);
+                characteristicCache = null;
+            }
+            deviceCache = null;
+        }
+
+        function handleCharacteristicValueChanged(event) {
+            let value = event.target.value.getFloat32(0, true);
+            console.log('Aruino Output: ' + value);
+        }
+
+        function log(data, type = '') {
+            terminalContainer.insertAdjacentHTML('beforeend',
+                '<div' + (type ? ' class="' + type + '"' : '') + '>' + data + '</div>');
+        }
+
+        function connectDeviceAndCacheCharacteristics(device) {
+            if (device.gatt.connected && characteristicCache) {
+                return Promise.resolve(characteristicCache);
+            }
+            console.log('Connecting to GATT server...');
+            return device.gatt.connect()
             .then(server => {
-                console.log('Getting GAP Service');
-                return server.getPrimaryService(serviceUuid);
+                console.log('GATT server connected, getting service...');
+                return server.getPrimaryService(serviceUuid)
             })
             .then(service => {
-                return service.getCharacteristic("19b10011-e8f2-537e-4f6c-d104768a1214")
+                console.log('Service found, getting characteristic...');
+                return service.getCharacteristic(characteristicsUUID["button"]);
             })
-
             .then(characteristic => {
-                console.log('Reading Battery Level...');
-                return characteristic.readValue();
-            })
-            .then(value => {
-                let batteryLevel = value.getUint8(0);
-                console.log('> Battery Level is ' + batteryLevel + '%');
-            })
-            .catch(error => {
-                console.log('Argh! ' + error);
-            })
-            }
+                console.log('Characteristic found');
+                characteristicCache = characteristic;
+                return characteristicCache;
+            });
 
-        document.querySelector('#read').addEventListener('click', function(event) {
-            event.stopPropagation();
-            event.preventDefault();
+        }
 
-            if (isWebBluetoothEnabled()) {
-                getDeviceInfo();
-            }
-        })
 
-        document.querySelector('#start').addEventListener('click', function(event) {
-            if (isWebBluetoothEnabled()) {
-                start();
-            }
-        })
 
-        document.querySelector('#stop').addEventListener('click', function(event) {
-            if (isWebBluetoothEnabled()) {
-                stop();
-            }
-        })
+
+
+
+
+
+
+
+        // // //
+        // function isWebBluetoothEnabled() {
+        //     if (!navigator.bluetooth) {
+        //         console.log('Web bluetooth API is not available in this browser!');
+        //         return false;
+        //     }
+        //     return true;
+        // }
+        // console.log("sample");
+
+        // function onReadBatteryLevelButtonClick() {
+        //     return (bluetoothDevice ? Promise.resolve() : requestDevice())
+        //     .then(connectDeviceAndCacheCharacteristics)
+        //     .then(_ => {
+        //         console.log('Reading Battery Level...');
+        //         return batteryLevel.readValue();
+        //     })
+        //     .catch(error => {
+        //         console.log('Argh! ' + error);
+        //     });
+        // }
+
+        // function requestDevice() {
+        //     let options = {
+        //         // acceptAllDevices: true // option to accept all devices
+        //         optionalServices: [serviceUuid],
+        //         "filters": [
+        //             {"name": deviceName}
+        //         ]
+        //     }
+        //     console.log('Requesting bluetooth device...');
+        //     return navigator.bluetooth.requestDevice(options).then(device => {
+        //         bluetoothDevice = device;
+        //         bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        //     });
+        // }
+
+        // function connectDeviceAndCacheCharacteristics() {
+        //     if (bluetoothDevice.gatt.connected && batteryLevel) {
+        //         return Promise.resolve();
+        //     }
+        //     console.log('Connecting to GATT Server...');
+        //     return bluetoothDevice.gatt.connect()
+        //     .then(server => {
+        //         console.log('Getting Battery Service...');
+        //         return server.getPrimaryService('battery_service');
+        //     })
+        //     .then(service => {
+        //         console.log('Getting Battery Level Characteristic...');
+        //         return service.getCharacteristic('battery_level');
+        //     })
+        //     .then(characteristic => {
+        //         batteryLevel = characteristic;
+        //         batteryLevel.addEventListener('characteristicvaluechanged', handleBatteryLevelChanged);
+        //     });
+        // }
+
+        // function handleBatteryLevelChanged(event) {
+        //     let batteryLevel = event.target.value.getUint8(0);
+        //     console.log('> Battery Level is ' + batteryLevel + '%');
+        // }
+
+        // function onDisconnected() {
+        //     console.log('> Bluetooth Device Disconnected');
+        //     connectDeviceAndCacheCharacteristics()
+        //     .catch(error => {
+        //         console.log('Error Connecting! ' + error);
+        //     });
+        // }
+
+        // function requestDevice() {
+        //     let options = {
+        //         // acceptAllDevices: true // option to accept all devices
+        //         optionalServices: [serviceUuid],
+        //         "filters": [
+        //             {"name": deviceName}
+        //         ]
+        //     }
+        //     console.log("Requesting bluetooth device...");
+        //     navigator.bluetooth.requestDevice(options).then(device => {
+        //         bluetoothDevice = device;
+        //         console.log('> Name: ' + device.name);
+        //         bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        //     });
+        // }
+
+        // document.querySelector('#read').addEventListener('click', function(event) {
+        //     event.stopPropagation();
+        //     event.preventDefault();
+
+        //     if (isWebBluetoothEnabled()) {
+        //         requestDevice();
+        //     }
+        // })
+
+        // document.querySelector('#start').addEventListener('click', function(event) {
+        //     onReadBatteryLevelButtonClick();
+        //     console.log('start button clicked');
+        // })
+
+
+
+
+        
+        // function getDeviceInfo() {
+        //     let options = {
+        //         // acceptAllDevices: true // option to accept all devices
+        //         optionalServices: [serviceUuid],
+        //         "filters": [
+        //             {"name": deviceName}
+        //         ]
+        //     }
+        //     console.log("Requesting bluetooth device...");
+        //     navigator.bluetooth.requestDevice(options).then(device => {
+        //         bluetoothDevice = device;
+        //         console.log('> Name: ' + device.name);
+        //         console.log('Connecting to GATT server');
+        //         return device.gatt.connect();
+        //     })
+        //     .then(server => {
+        //         console.log('Getting GAP Service');
+        //         return server.getPrimaryService(serviceUuid);
+        //     })
+        //     .then(service => {
+        //         return service.getCharacteristic("19b10011-e8f2-537e-4f6c-d104768a1214")
+        //     })
+
+        //     .then(characteristic => {
+        //         console.log('Reading Battery Level...');
+        //         return characteristic.readValue();
+        //     })
+        //     .then(value => {
+        //         batteryLevel = value.getUint8(0);
+        //         console.log('> Battery Level is ' + batteryLevel + '%');
+        //     })
+        //     .catch(error => {
+        //         console.log('Argh! ' + error);
+        //     })
+        //     }
+
+        // document.querySelector('#read').addEventListener('click', function(event) {
+        //     event.stopPropagation();
+        //     event.preventDefault();
+
+        //     if (isWebBluetoothEnabled()) {
+        //         getDeviceInfo();
+        //     }
+        // })
+
+        // document.querySelector('#start').addEventListener('click', function(event) {
+        //     if (isWebBluetoothEnabled()) {
+        //         start();
+        //     }
+        // })
+
+        // document.querySelector('#stop').addEventListener('click', function(event) {
+        //     if (isWebBluetoothEnabled()) {
+        //         stop();
+        //     }
+        // })
 
 
 
