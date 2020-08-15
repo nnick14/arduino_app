@@ -1,20 +1,8 @@
 /*
-  Button LED
+  Arduino application to control the Odyssey Espresso Machine sensor readings.
 
-  This example creates a BLE peripheral with service that contains a
-  characteristic to control an LED and another characteristic that
-  represents the state of the button.
+  Using an Arduino Nano 33 BLE Sense board.
 
-  The circuit:
-  - Arduino MKR WiFi 1010, Arduino Uno WiFi Rev2 board, Arduino Nano 33 IoT,
-    Arduino Nano 33 BLE, or Arduino Nano 33 BLE Sense board.
-  - Button connected to pin 4
-
-  You can use a generic BLE central app, like LightBlue (iOS and Android) or
-  nRF Connect (Android), to interact with the services and characteristics
-  created in this sketch.
-
-  This example code is in the public domain.
 */
 
 #include <ArduinoBLE.h>
