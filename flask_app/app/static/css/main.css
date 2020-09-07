@@ -1,0 +1,60 @@
+body {
+    padding: 0px;
+    background: #fcfcfc;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+header {
+    padding-bottom: 10px;
+    text-align: center;
+}
+
+#head1 {
+    padding-top: 10px;
+}
+
+.metrics-text {
+    padding-left: 10%;
+}
+
+.metrics-text {
+    color: gray;
+}
+
+svg {
+    fill: green;
+}
+
+svg:active {
+    fill: purple;
+
+}
+
+#stop-btn {
+    color: gray;
+}
+
+.d-flex {
+    position: relative;
+}
+.connect-button {
+    position: absolute;
+    bottom: 2%;
+    right: 2%;
+}
+
+.lineChart {
+    width: 75%;
+}
+
+.gauge-chart {
+    width: 25%;
+}
+
+.metrics-val {
+    color: black;
+}
+
+#first-row {
+    padding: 20px;
+}
