@@ -76,7 +76,7 @@ void loop() {
 
   // read the current button pin state
 //  char buttonValue = digitalRead(buttonPin);
-  float buttonValue = (random(1, 99) / 100.0) + random(12, 24);
+  float buttonValue = (random(1, 99) / 100.0) + random(2, 12);
 
   // has the value changed since the last read
   boolean buttonChanged = (buttonCharacteristic.value() != buttonValue);

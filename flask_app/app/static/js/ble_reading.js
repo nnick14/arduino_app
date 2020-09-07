@@ -39,8 +39,32 @@ let tempText = document.getElementById('temp');
 let newText = document.getElementById('new');
 let tempHTML = document.getElementById('temp-val')
 
-let timeText = document.getElementById('timer');
-d = new Date();
+let arduinoFrequency = 1; // Frequency that the Arduino is sending values
+
+function displayTime(displayFrequency) {
+    this.start = function() {
+        this.interval = setInterval(step, displayFrequency, Date.now());
+    }
+    this.stop = function() {
+        clearInterval(this.interval);
+    }
+
+    function step(startTime) {
+        var delta  = Date.now() - startTime;
+        if (delta <= 1) {
+            var seconds = 0;
+        }
+        else {
+            var seconds = Math.floor(delta / displayFrequency);
+        }
+        document.getElementById('timer').textContent = seconds;
+    }
+}
+
+// Creating a timer that logs the time every second
+var timer = new displayTime(1000);
+
+
 
 tempHTML.textContent = 1;
 
@@ -50,6 +74,7 @@ connectButton.addEventListener('click', function() {
     event.stopPropagation();
     event.preventDefault();
     connect();
+
 });
 
 disconnectButton.addEventListener('click', function() {
@@ -62,12 +87,14 @@ stopButton.addEventListener('click', function() {
     event.stopPropagation();
     event.preventDefault();
     stopNotificationsClick();
+    // timer.stop();
 });
 
 startButton.addEventListener('click', function() {
     event.stopPropagation();
     event.preventDefault();
     startNotificationsClick();
+    // timer.start();
 });
 
 // This creates a connection between the BLE microcontroller and the
@@ -75,10 +102,17 @@ startButton.addEventListener('click', function() {
 function connect() {
     return (deviceCache ? Promise.resolve(deviceCache) : requestBluetoothDevice())
     .then(device => connectDeviceAndCacheCharacteristics(device))
-    .catch(error => console.log('Argh! ' + error));
+    .catch(error => {
+        console.log('Argh! ' + error);
+        // If the action is cancelled, the button goes back to normal
+        connectButton.textContent = "Connect BLE device";
+    });
 }
 
 function requestBluetoothDevice() {
+    // Creating a loading button animation for BLE connect
+    var loadingText = '<i class="fa fa-circle-o-notch fa-spin"></i> Connecting Device...';
+    connectButton.innerHTML = loadingText;
     console.log('Requesting bluetooth device...');
     let options = {
         optionalServices: [serviceUuid],
@@ -114,6 +148,8 @@ function handleDisconnection(event) {
 
 // Provide a method to start the notifications upon clicking the
 // `start` button
+var time = 0;
+
 function startNotificationsClick() {
     console.log('Starting notifications...');
     tempCharacteristic.startNotifications()
@@ -190,16 +226,49 @@ function disconnect() {
 function handleCharacteristicValueChanged(event) {
     // Output the value for each event differently
     let tempValue = event.target.value.getFloat32(0, true);
-    console.log('Aruino Output for ' + 
+    console.log('Arduino Output for ' + 
         uuidLookup[event.target.uuid] + ': ' + tempValue.toFixed(2));
     if (uuidLookup[event.target.uuid] == 'temp') {
+        // Increments the values every time they come in
+        // In this case, ticks is the number of seconds
+        ++time;
+        document.getElementById('timer').textContent = time;
+        line_config.data.labels.push(time);
+
+        // Changes the pressure value each time it comes in
         tempText.textContent = tempValue.toFixed(2);
+        line_config.data.datasets[0].data.push(tempValue.toFixed(2));
+
+        // Gauge chart updating values
+        gauge_config.options.title.text = tempValue.toFixed(2);
+
+        // Updating the label values
+        document.getElementById('time-val').innerHTML = `${time} s`;
+        document.getElementById('pressure-val').innerHTML = `${tempValue.toFixed(2)} bar`;
+
+        // Updating the gauge chart values
+        gauge_config.options.title.text = tempValue.toFixed(2);
+
+        // 20 is the max bar value
+        let first_val = (tempValue / 20) * 100;
+        let second_val = ((20 - tempValue) / 20) * 100;
+
+        // Emptying the dataset every time
+        gauge_config.data.datasets[0].data = [];
+
+        gauge_config.data.datasets[0].data.push(first_val);
+        gauge_config.data.datasets[0].data.push(second_val);
+
+        myChart.update();
+        myChart1.update();
+
+
     } else if (uuidLookup[event.target.uuid] == 'newChar') {
         newText.textContent = tempValue.toFixed(2);
         tempHTML.textContent = tempValue.toFixed(2);
     }
-
 }
+
 
 function log(data, type = '') {
     terminalContainer.insertAdjacentHTML('beforeend',
@@ -214,7 +283,8 @@ function connectDeviceAndCacheCharacteristics(device) {
     return device.gatt.connect()
     .then(server => {
         console.log('GATT server connected, getting service...');
-        return server.getPrimaryService(serviceUuid)
+        // TODO: this is a lagging point - find a way to make this connection faster
+        return server.getPrimaryService(serviceUuid);
     })
     .then(service => {
         console.log('Service found, getting characteristic...');
@@ -239,6 +309,7 @@ function connectDeviceAndCacheCharacteristics(device) {
         startButton.disabled = false;
         disconnectButton.disabled = false;
         connectButton.disabled = true;
+        connectButton.textContent = "Connect BLE device";
         return [tempCharacteristic, newCharacteristic];
     });
 
@@ -258,131 +329,231 @@ This section contains the code necessary for the plotting.
 import "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.js"
 
 
-$(document).ready(function () {
-    const line_config = {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: "pressure",
-                backgroundColor: 'red',
-                borderColor: 'red',
-                data: [],
-                fill: false,
-            }],
-        },
-        options: {
-            legend: {
-                position: 'bottom',
-                display: false
-            },
-            responsive: true,
-            title: {
-                display:false,
-            },
-            tooltips: {
-                mode: 'index',
-                intersect: false,
-            },
-            hover: {
-                mode: 'nearest',
-                intersect: true
-            },
-            scales: {
-                xAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'time (sec)',
-                        fontSize: 20,
-                    },
-                    ticks: {
-                        max: 60,
-                        min: 0
-                    }
-                }],
-                yAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'pressure (bar)',
-                        fontSize: 20,
-                    },
-                    ticks: {
-                        max: 14,
-                        min: 0,
-                    }
-                }]
-            }
-        }
-    };
-    const gauge_config = {
-        type: 'doughnut',
-        data: {
-            labels: false,
-            datasets: [{
-                borderColor: "white",
-                backgroundColor: ["red", "gray"],
-                data: [],
-                fill: false,
-            }],
-        },
-        options: {
-            title: {
-                display:true,
-                text: [],
-                position: "bottom",
-                fontSize: 20,
-            },
-            circumference: 1.5 * Math.PI,
-            rotation: 0.75 * Math.PI,
-            cutoutPercentage: 50,
-            legend: {
-                display: false,
-            },
-            tooltips: {
-                enabled: false
-            }
+// $(document).ready(function () {
+//     const line_config = {
+//         type: 'line',
+//         data: {
+//             labels: [],
+//             datasets: [{
+//                 label: "pressure",
+//                 backgroundColor: 'red',
+//                 borderColor: 'red',
+//                 data: [],
+//                 fill: false,
+//             }],
+//         },
+//         options: {
+//             legend: {
+//                 position: 'bottom',
+//                 display: false
+//             },
+//             responsive: true,
+//             title: {
+//                 display:false,
+//             },
+//             tooltips: {
+//                 mode: 'index',
+//                 intersect: false,
+//             },
+//             hover: {
+//                 mode: 'nearest',
+//                 intersect: true
+//             },
+//             scales: {
+//                 xAxes: [{
+//                     display: true,
+//                     scaleLabel: {
+//                         display: true,
+//                         labelString: 'time (sec)',
+//                         fontSize: 20,
+//                     },
+//                     ticks: {
+//                         max: 60,
+//                         min: 0
+//                     }
+//                 }],
+//                 yAxes: [{
+//                     display: true,
+//                     scaleLabel: {
+//                         display: true,
+//                         labelString: 'pressure (bar)',
+//                         fontSize: 20,
+//                     },
+//                     ticks: {
+//                         max: 14,
+//                         min: 0,
+//                     }
+//                 }]
+//             }
+//         }
+//     };
+//     const gauge_config = {
+//         type: 'doughnut',
+//         data: {
+//             labels: false,
+//             datasets: [{
+//                 borderColor: "white",
+//                 backgroundColor: ["red", "gray"],
+//                 data: [],
+//                 fill: false,
+//             }],
+//         },
+//         options: {
+//             title: {
+//                 display:true,
+//                 text: [],
+//                 position: "bottom",
+//                 fontSize: 20,
+//             },
+//             circumference: 1.5 * Math.PI,
+//             rotation: 0.75 * Math.PI,
+//             cutoutPercentage: 50,
+//             legend: {
+//                 display: false,
+//             },
+//             tooltips: {
+//                 enabled: false
+//             }
             
+//         }
+//     };
+
+//     const line_ctx = document.getElementById('myChart').getContext('2d');
+//     const myChart = new Chart(line_ctx, line_config);
+
+//     const gauge_ctx = document.getElementById('myChart1').getContext('2d');
+//     const myChart1 = new Chart(gauge_ctx, gauge_config);
+
+//     const source = new EventSource("/chart-data");
+
+//     source.onmessage = function (event) {
+//         const data = JSON.parse(event.data);
+
+//         // Increments the values every time they come in
+//         // In this case, ticks is the number of seconds
+//         // ticks += 1;
+//         // timeText.textContent = ticks;
+//         // Updating the line chart values
+//         line_config.data.labels.push(data.time);
+//         line_config.data.datasets[0].data.push(data.value.toFixed(2));
+        
+//         // Updating the label values
+//         document.getElementById('time-val').innerHTML = `${data.time} s`;
+//         document.getElementById('pressure-val').innerHTML = `${data.value.toFixed(2)} bar`;
+
+//         // Updating the gauge chart values
+//         gauge_config.options.title.text = data.value.toFixed(2);
+
+//         // 20 is the max bar value
+//         let first_val = (data.value / 20) * 100;
+//         let second_val = ((20 - data.value) / 20) * 100;
+
+//         // Emptying the dataset every time
+//         gauge_config.data.datasets[0].data = [];
+
+//         gauge_config.data.datasets[0].data.push(first_val);
+//         gauge_config.data.datasets[0].data.push(second_val);
+
+//         myChart1.update();
+
+//         myChart.update();
+//     }
+
+
+// });
+
+
+const line_config = {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: "pressure",
+            backgroundColor: 'red',
+            borderColor: 'red',
+            data: [],
+            fill: false,
+        }],
+    },
+    options: {
+        legend: {
+            position: 'bottom',
+            display: false
+        },
+        responsive: true,
+        title: {
+            display:false,
+        },
+        tooltips: {
+            mode: 'index',
+            intersect: false,
+        },
+        hover: {
+            mode: 'nearest',
+            intersect: true
+        },
+        scales: {
+            xAxes: [{
+                display: true,
+                scaleLabel: {
+                    display: true,
+                    labelString: 'time (sec)',
+                    fontSize: 20,
+                },
+                ticks: {
+                    max: 60,
+                    min: 0
+                }
+            }],
+            yAxes: [{
+                display: true,
+                scaleLabel: {
+                    display: true,
+                    labelString: 'pressure (bar)',
+                    fontSize: 20,
+                },
+                ticks: {
+                    max: 14,
+                    min: 0,
+                }
+            }]
         }
-    };
-
-    const line_ctx = document.getElementById('myChart').getContext('2d');
-    const myChart = new Chart(line_ctx, line_config);
-
-    const gauge_ctx = document.getElementById('myChart1').getContext('2d');
-    const myChart1 = new Chart(gauge_ctx, gauge_config);
-
-    const source = new EventSource("/chart-data");
-
-    source.onmessage = function (event) {
-        const data = JSON.parse(event.data);
-        
-        // Updating the line chart values
-        line_config.data.labels.push(data.time);
-        line_config.data.datasets[0].data.push(data.value.toFixed(2));
-        
-        // Updating the label values
-        document.getElementById('time-val').innerHTML = `${data.time} s`;
-        document.getElementById('pressure-val').innerHTML = `${data.value.toFixed(2)} bar`;
-
-        // Updating the gauge chart values
-        gauge_config.options.title.text = data.value.toFixed(2);
-
-        // 20 is the max bar value
-        let first_val = (data.value / 20) * 100;
-        let second_val = ((20 - data.value) / 20) * 100;
-
-        // Emptying the dataset every time
-        gauge_config.data.datasets[0].data = [];
-
-        gauge_config.data.datasets[0].data.push(first_val);
-        gauge_config.data.datasets[0].data.push(second_val);
-
-        myChart1.update();
-
-        myChart.update();
     }
+};
 
+const gauge_config = {
+    type: 'doughnut',
+    data: {
+        labels: false,
+        datasets: [{
+            borderColor: "white",
+            backgroundColor: ["red", "gray"],
+            data: [],
+            fill: false,
+        }],
+    },
+    options: {
+        title: {
+            display:true,
+            text: [],
+            position: "bottom",
+            fontSize: 20,
+        },
+        circumference: 1.5 * Math.PI,
+        rotation: 0.75 * Math.PI,
+        cutoutPercentage: 50,
+        legend: {
+            display: false,
+        },
+        tooltips: {
+            enabled: false
+        }
+        
+    }
+};
 
-});
+const line_ctx = document.getElementById('myChart').getContext('2d');
+const myChart = new Chart(line_ctx, line_config);
+
+const gauge_ctx = document.getElementById('myChart1').getContext('2d');
+const myChart1 = new Chart(gauge_ctx, gauge_config);
