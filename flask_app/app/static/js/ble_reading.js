@@ -41,6 +41,29 @@ let tempHTML = document.getElementById('temp-val')
 
 let arduinoFrequency = 1; // Frequency that the Arduino is sending values
 
+try {
+    navigator.bluetooth.getAvailability()
+    .then(available => {
+        if (available) {
+            console.log("This device supports Bluetooth!");
+        }
+        else {
+            console.log("Doh! Bluetooth is not supported");
+        }
+    });
+} catch (error) {
+    console.log(error, "Error! Bluetooth is not supported");
+    let div_alert = document.createElement("div");
+    div_alert.setAttribute("class", "alert alert-danger");
+    div_alert.style.textAlign = "center";
+    div_alert.innerHTML = 'We couldn&rsquo;t detect support for the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API">Web Bluetooth API</a> in your web browser. ' +
+    'Please try <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API#Browser_compatibility"> any of the supported browsers.</a>.';
+    let main_section = document.getElementById("main-section")
+    main_section.insertBefore(div_alert, document.getElementById("first-row"));
+}
+
+
+
 function displayTime(displayFrequency) {
     this.start = function() {
         this.interval = setInterval(step, displayFrequency, Date.now());
@@ -65,8 +88,6 @@ function displayTime(displayFrequency) {
 var timer = new displayTime(1000);
 
 
-
-tempHTML.textContent = 1;
 
 readyButton.style.color = "gray";
 
