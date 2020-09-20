@@ -30,7 +30,7 @@ void celsius_to_fahr(float &temp) {
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial);
+  // while (!Serial);
 
   pinMode(ledPin, OUTPUT); // use the LED as an output
   pinMode(buttonPin, INPUT); // use button pin as an input
