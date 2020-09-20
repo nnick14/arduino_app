@@ -34,6 +34,10 @@ svg:active {
     color: gray;
 }
 
+#ready-button {
+    color: gray;
+}
+
 .d-flex {
     position: relative;
 }
@@ -61,4 +65,8 @@ svg:active {
 
 .description-top {
     text-align: center;
+}
+
+#blog {
+    padding-top: 20px;
 }

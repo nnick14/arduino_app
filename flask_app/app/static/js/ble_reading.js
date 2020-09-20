@@ -34,7 +34,7 @@ let deviceCache = null;
 let tempCharacteristic = null;
 let newCharacteristic = null;
 let terminalContainer = document.getElementById('terminal');
-let readyButton = document.getElementById('ready');
+let readyButton = document.getElementById('ready-button');
 let tempText = document.getElementById('temp');
 let newText = document.getElementById('new');
 let tempHTML = document.getElementById('temp-val')
@@ -45,7 +45,7 @@ try {
     navigator.bluetooth.getAvailability()
     .then(available => {
         if (available) {
-            console.log("This device supports Bluetooth!");
+            console.log("This browser supports Bluetooth!");
         }
         else {
             console.log("Doh! Bluetooth is not supported");
@@ -89,29 +89,28 @@ var timer = new displayTime(1000);
 
 
 
-readyButton.style.color = "gray";
 
-connectButton.addEventListener('click', function() {
+connectButton.addEventListener('click', (event) => {
     event.stopPropagation();
     event.preventDefault();
     connect();
 
 });
 
-disconnectButton.addEventListener('click', function() {
+disconnectButton.addEventListener('click', (event) => {
     event.stopPropagation();
     event.preventDefault();
     disconnect();
 });
 
-stopButton.addEventListener('click', function() {
+stopButton.addEventListener('click', (event) => {
     event.stopPropagation();
     event.preventDefault();
     stopNotificationsClick();
     // timer.stop();
 });
 
-startButton.addEventListener('click', function() {
+startButton.addEventListener('click', (event) => {
     event.stopPropagation();
     event.preventDefault();
     startNotificationsClick();
@@ -327,6 +326,7 @@ function connectDeviceAndCacheCharacteristics(device) {
             }
         }
         readyButton.style.color = 'green';
+
         startButton.disabled = false;
         disconnectButton.disabled = false;
         connectButton.disabled = true;
